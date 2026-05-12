@@ -129,30 +129,45 @@ def create_request(code, start, end):
 
 async def lookup_profile(request, parameters, user_options = None):
     user = user_options or {}
-    if (response := await request(requests = create_request(*AUTODETECTION_REQUEST_DEYE))) and (device_type := get_addr_value(response, *AUTODETECTION_DEVICE_DEYE)):
+
+    response = await request(requests = create_request(*AUTODETECTION_REQUEST_DEYE))
+    if not response or not (device_type := get_addr_value(response, *AUTODETECTION_DEVICE_DEYE)):
+        raise Exception("Unable to read Device Type")
+
+    if device_type not in AUTODETECTION_DEYE:
+        raise Exception(f"Unknown Device Type: {device_type}")
+
+    profile, min_mod, type_reg = AUTODETECTION_DEYE[device_type]
+
+    # Single-phase hybrids: reg 0x0008 encodes the actual phase type (1P vs 3P)
+    if device_type in AUTODETECTION_DEYE_HYBRID_CODES:
+        if (t := get_addr_value(response, *AUTODETECTION_TYPE_DEYE)) and CONF_PHASE not in user:
+            parameters[PARAM_[CONF_PHASE]] = min(1 if t <= 2 or t == 8 else 3, parameters[PARAM_[CONF_PHASE]])
+
+    # type_reg encodes: bits 8-11 = MPPT count, bits 0-3 = phase count
+    if v := get_addr_value(response, AUTODETECTION_CODE_DEYE, type_reg):
+        mppt  = (v & 0x0F00) >> 8
+        phase = v & 0x000F
+        mppt  = 2 if mppt  > 12 else mppt   # clamp outliers to 2
+        phase = 3 if phase > 3  else phase   # clamp to max 3 phases
+        if mppt and phase:
+            if CONF_MOD not in user:
+                parameters[PARAM_[CONF_MOD]]  = max(min_mod, parameters[PARAM_[CONF_MOD]])
+            if CONF_MPPT not in user:
+                parameters[PARAM_[CONF_MPPT]] = min(mppt,  parameters[PARAM_[CONF_MPPT]])
+            if CONF_PHASE not in user:
+                parameters[PARAM_[CONF_PHASE]] = min(phase, parameters[PARAM_[CONF_PHASE]])
+
+    # 3-phase models: detect number of installed battery packs from reg 0x2712
+    if device_type in AUTODETECTION_DEYE_3PHASE_CODES:
         try:
-            f, m, c = next(iter([AUTODETECTION_DEYE[i] for i in AUTODETECTION_DEYE if device_type in i]))
-            if (t := get_addr_value(response, *AUTODETECTION_TYPE_DEYE)) and device_type in AUTODETECTION_DEYE_P1[0]:
-                if CONF_PHASE not in user:
-                    parameters[PARAM_[CONF_PHASE]] = min(1 if t <= 2 or t == 8 else 3, parameters[PARAM_[CONF_PHASE]])
-            if (v := get_addr_value(response, AUTODETECTION_CODE_DEYE, c)) and (t := (v & 0x0F00) // 0x100) and (p := v & 0x000F) and (t := 2 if t > 12 else t) and (p := 3 if p > 3 else p):
-                if CONF_MOD not in user:
-                    parameters[PARAM_[CONF_MOD]] = max(m, parameters[PARAM_[CONF_MOD]])
-                if CONF_MPPT not in user:
-                    parameters[PARAM_[CONF_MPPT]] = min(t, parameters[PARAM_[CONF_MPPT]])
-                if CONF_PHASE not in user:
-                    parameters[PARAM_[CONF_PHASE]] = min(p, parameters[PARAM_[CONF_PHASE]])
-            try:
-                if device_type in (*AUTODETECTION_DEYE_4P3[0], *AUTODETECTION_DEYE_1P3[0]) and (response := await request(requests = create_request(*AUTODETECTION_BATTERY_REQUEST_DEYE))) and (p := get_addr_value(response, *AUTODETECTION_BATTERY_NUMBER_DEYE)) is not None:
-                    if CONF_PACK not in user:
-                        parameters[PARAM_[CONF_PACK]] = p if parameters[PARAM_[CONF_PACK]] == DEFAULT_[CONF_PACK] else min(p, parameters[PARAM_[CONF_PACK]])
-            except:
-                _LOGGER.debug(f"Unable to read Number of Battery packs. Continuing with the configured value", exc_info = True)
-                pass
-            return f
-        except StopIteration:
-            raise Exception(f"Unknown Device Type: {device_type}")
-    raise Exception("Unable to read Device Type")
+            response = await request(requests = create_request(*AUTODETECTION_BATTERY_REQUEST_DEYE))
+            if (p := get_addr_value(response, *AUTODETECTION_BATTERY_NUMBER_DEYE)) is not None and CONF_PACK not in user:
+                parameters[PARAM_[CONF_PACK]] = p if parameters[PARAM_[CONF_PACK]] == DEFAULT_[CONF_PACK] else min(p, parameters[PARAM_[CONF_PACK]])
+        except Exception:
+            _LOGGER.debug("Unable to read Number of Battery packs. Continuing with the configured value", exc_info = True)
+
+    return profile
 
 def process_profile(filename, parameters):
     if filename in PROFILE_REDIRECT and (r := PROFILE_REDIRECT[filename]):
