@@ -65,12 +65,12 @@
           "host": "Hostname or IP address of the device to connect to",
           "port": "Port (8899) of the device to connect to",
           "transport": "Transport protocol used during communication with the device",
-          "lookup_file": "The yaml file containing inverter parameter definitions"
+          "lookup_file": "The yaml file containing inverter parameter definitions (auto-detected: {detected_lookup_file})"
         },
         "sections": {
           "additional_options": {
             "name": "Additional options",
-            "data": { 
+            "data": {
               "mod": "Modifier",
               "mppt": "Number of MPPTs",
               "phase": "Number of Phases",
@@ -78,6 +78,12 @@
               "battery_nominal_voltage": "Lithium-ion battery nominal voltage",
               "battery_life_cycle_rating": "Lithium-ion battery expected life cycle rating",
               "mb_slave_id": "Modbus Slave ID (usually 1)"
+            },
+            "data_description": {
+              "mod": "Auto-detected: {detected_mod}",
+              "mppt": "Auto-detected: {detected_mppt}",
+              "phase": "Auto-detected: {detected_phase}",
+              "pack": "Auto-detected: {detected_pack}"
             }
           }
         }

@@ -4,7 +4,7 @@ import socket
 
 from typing import Any
 from aiohttp import FormData
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from propcache import cached_property
 from collections.abc import Awaitable, Callable
 from ipaddress import IPv4Address, AddressValueError
@@ -109,13 +109,14 @@ class ProfileProvider:
     config: ConfigurationProvider
     endpoint: EndPointProvider
     parser: ParameterParser | None = None
+    detected: dict = field(default_factory = dict)
 
     def __getattr__(self, attr: str):
         return getattr(self.config, attr)
 
     @cached_property
     def auto(self):
-        return not self.filename or self.filename in AUTODETECTION_REDIRECT
+        return self.filename == DEFAULT_[CONF_LOOKUP_FILE]
 
     @cached_property
     def parameters(self):
@@ -126,6 +127,7 @@ class ProfileProvider:
         return self.parser.info
 
     async def init(self, request: Callable[[int, dict], Awaitable[dict]] | None = None):
-        if (f := await lookup_profile(request, self.parameters) if self.auto else self.filename) and f != DEFAULT_[CONF_LOOKUP_FILE] and (n := process_profile(f, self.parameters)):
+        if (f := await lookup_profile(request, self.parameters, self._additional_options) if self.auto else self.filename) and f != DEFAULT_[CONF_LOOKUP_FILE] and (n := process_profile(f, self.parameters)):
+            self.detected = {CONF_LOOKUP_FILE: n} | {k: self.parameters[v] for k, v in PARAM_.items()}
             self.parser = await ParameterParser().init(self.config.directory, n, self.parameters)
         return self

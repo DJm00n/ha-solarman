@@ -127,17 +127,25 @@ def ensure_list_safe_len(value: list):
 def create_request(code, start, end):
     return { REQUEST_CODE: code, REQUEST_START: start, REQUEST_END: end, REQUEST_COUNT: end - start + 1 }
 
-async def lookup_profile(request, parameters):
+async def lookup_profile(request, parameters, user_options = None):
+    user = user_options or {}
     if (response := await request(requests = create_request(*AUTODETECTION_REQUEST_DEYE))) and (device_type := get_addr_value(response, *AUTODETECTION_DEVICE_DEYE)):
         try:
             f, m, c = next(iter([AUTODETECTION_DEYE[i] for i in AUTODETECTION_DEYE if device_type in i]))
             if (t := get_addr_value(response, *AUTODETECTION_TYPE_DEYE)) and device_type in AUTODETECTION_DEYE_P1[0]:
-                parameters[PARAM_[CONF_PHASE]] = min(1 if t <= 2 or t == 8 else 3, parameters[PARAM_[CONF_PHASE]])
+                if CONF_PHASE not in user:
+                    parameters[PARAM_[CONF_PHASE]] = min(1 if t <= 2 or t == 8 else 3, parameters[PARAM_[CONF_PHASE]])
             if (v := get_addr_value(response, AUTODETECTION_CODE_DEYE, c)) and (t := (v & 0x0F00) // 0x100) and (p := v & 0x000F) and (t := 2 if t > 12 else t) and (p := 3 if p > 3 else p):
-                parameters[PARAM_[CONF_MOD]], parameters[PARAM_[CONF_MPPT]], parameters[PARAM_[CONF_PHASE]] = max(m, parameters[PARAM_[CONF_MOD]]), min(t, parameters[PARAM_[CONF_MPPT]]), min(p, parameters[PARAM_[CONF_PHASE]])
+                if CONF_MOD not in user:
+                    parameters[PARAM_[CONF_MOD]] = max(m, parameters[PARAM_[CONF_MOD]])
+                if CONF_MPPT not in user:
+                    parameters[PARAM_[CONF_MPPT]] = min(t, parameters[PARAM_[CONF_MPPT]])
+                if CONF_PHASE not in user:
+                    parameters[PARAM_[CONF_PHASE]] = min(p, parameters[PARAM_[CONF_PHASE]])
             try:
                 if device_type in (*AUTODETECTION_DEYE_4P3[0], *AUTODETECTION_DEYE_1P3[0]) and (response := await request(requests = create_request(*AUTODETECTION_BATTERY_REQUEST_DEYE))) and (p := get_addr_value(response, *AUTODETECTION_BATTERY_NUMBER_DEYE)) is not None:
-                    parameters[PARAM_[CONF_PACK]] = p if parameters[PARAM_[CONF_PACK]] == DEFAULT_[CONF_PACK] else min(p, parameters[PARAM_[CONF_PACK]])
+                    if CONF_PACK not in user:
+                        parameters[PARAM_[CONF_PACK]] = p if parameters[PARAM_[CONF_PACK]] == DEFAULT_[CONF_PACK] else min(p, parameters[PARAM_[CONF_PACK]])
             except:
                 _LOGGER.debug(f"Unable to read Number of Battery packs. Continuing with the configured value", exc_info = True)
                 pass
