@@ -170,4 +170,5 @@ class SolarmanWritableEntity(SolarmanEntity):
             self.set_state(state, value)
             self.async_write_ha_state()
             #await self.entity_description.update_fn(self.coordinator., int(value))
-            #await self.coordinator.async_request_refresh()
+            if getattr(self, "mask", None) is not None:
+                await self.coordinator.async_request_refresh()

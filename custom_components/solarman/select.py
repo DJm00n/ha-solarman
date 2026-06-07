@@ -114,7 +114,8 @@ class SolarmanSelectEntity(SolarmanWritableEntity, SelectEntity):
     def __init__(self, coordinator, sensor):
         SolarmanWritableEntity.__init__(self, coordinator, sensor)
 
-        self.mask = display.get("mask") if (display := sensor.get("display")) else None
+        display = sensor.get("display")
+        self.mask = (display.get("mask") if display else None) or sensor.get("mask")
 
         if "lookup" in sensor:
             self.dictionary = sensor["lookup"]
@@ -126,7 +127,7 @@ class SolarmanSelectEntity(SolarmanWritableEntity, SelectEntity):
         if self.dictionary:
             for o in self.dictionary:
                 if o["value"] == value and (key := from_bit_index(o["bit"]) if "bit" in o else o["key"]) is not None:
-                    return (key if not "mode" in o else (self._attr_value | key)) if not self.mask else (self._attr_value & (0xFFFFFFFF - self.mask) | key)
+                    return key if self.mask else (key if not "mode" in o else (self._attr_value | key))
 
         return self.options.index(value)
 
@@ -141,4 +142,9 @@ class SolarmanSelectEntity(SolarmanWritableEntity, SelectEntity):
 
     async def async_select_option(self, option: str):
         """Change the selected option."""
-        await self.write(self.get_key(option), option)
+        key = self.get_key(option)
+        if self.mask is not None:
+            current = await self.coordinator.device.execute(self.code_read, self.register, count = 1)
+            current_raw = current[0] if current else 0
+            key = (current_raw & ~self.mask) | (key & self.mask)
+        await self.write(key, option)
