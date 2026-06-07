@@ -415,6 +415,7 @@ class ParameterParser:
     def try_parse_time(self, data, definition):
         code = get_code(definition, "read")
         f, d = ("{:02d}", get_or_def(definition, "dec", 100)) if not "hex" in definition else ("{:02x}", get_or_def(definition, "hex", 0x100))
+        mul = definition.get("mul", 1)
         offset = definition.get("offset")
         value = ""
 
@@ -426,7 +427,7 @@ class ParameterParser:
 
             if registers_count == 1:
                 high, low = div_mod(temp, d)
-                value = str(f.format(int(high))) + ":" + str(f.format(int(low)))
+                value = str(f.format(int(high))) + ":" + str(f.format(int(low * mul)))
             else:
                 if temp >= d:
                     f = "{:02d}"

@@ -46,7 +46,16 @@ class Device():
         try:
             self.endpoint = await EndPointProvider(self.config).init()
             self.modbus = Solarman(*self.endpoint.connection)
-            self.profile = await ProfileProvider(self.config, self.endpoint).init(self.get)
+            for slave_id in range(1, 4):
+                if slave_id > 1:
+                    await self.modbus.close()
+                    self.modbus = Solarman(self.endpoint.host, self.endpoint.port, self.endpoint.transport, self.endpoint.serial, slave_id, TIMINGS_INTERVAL)
+                try:
+                    self.profile = await ProfileProvider(self.config, self.endpoint).init(self.get)
+                    break
+                except Exception:
+                    if slave_id >= 3:
+                        raise
         except Exception as e:
             raise type(e)(f"{"Timeout" if (x := isinstance(e, TimeoutError)) else "Error"} setuping {self.config.name}{"" if x else f": {strepr(e)}"}") from e
         else:
